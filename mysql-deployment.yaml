@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql-deployment  # نام Deployment
+  labels:
+    app: mysql
+
+spec:
+  replicas: 1  # تعداد پادهای MySQL (معمولاً یک پاد کافی است)
+
+  selector:
+    matchLabels:
+      app: mysql  # برچسب‌هایی که پادها باید داشته باشند تا توسط این Deployment مدیریت شوند
+
+  template:
+    metadata:
+      labels:
+        app: mysql  # برچسب‌ها برای پادهای MySQL
+
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:8.0  # تصویر Docker برای MySQL
+        ports:
+        - containerPort: 3306  # پورت MySQL
+
+        env:
+        - name: MYSQL_ROOT_PASSWORD  # تنظیم رمز عبور root
+          value: your-root-password
+
+        volumeMounts:
+        - name: mysql-storage  # نصب ولوم برای ذخیره‌سازی پایدار داده‌ها
+          mountPath: /var/lib/mysql
+
+        # درخواست‌ها و محدودیت‌های منابع
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+
+        # بررسی زنده بودن کانتینر
+        livenessProbe:
+          tcpSocket:
+            port: 3306
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        # بررسی آمادگی کانتینر
+        readinessProbe:
+          tcpSocket:
+            port: 3306
+          initialDelaySeconds: 30
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+        # تنظیمات امنیتی
+        securityContext:
+          runAsUser: 1001
+          runAsGroup: 3001
+          fsGroup: 2001
+          allowPrivilegeEscalation: false
+
+      # امنیت سطح پاد
+      securityContext:
+        fsGroup: 2001
+
+      volumes:
+      - name: mysql-storage  # تعریف Persistent Volume برای ذخیره‌سازی پایدار
+        persistentVolumeClaim:
+          claimName: mysql-pvc
+
+      # تعیین affinity و anti-affinity
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - your-node-name
