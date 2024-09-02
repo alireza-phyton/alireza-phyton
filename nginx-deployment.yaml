@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment  # نام Deployment
+  labels:
+    app: nginx
+
+spec:
+  replicas: 3  # تعداد پادهای nginx که باید همزمان اجرا شوند
+
+  selector:
+    matchLabels:
+      app: nginx  # برچسب‌هایی که پادها باید داشته باشند تا توسط این Deployment مدیریت شوند
+
+  template:
+    metadata:
+      labels:
+        app: nginx  # برچسب‌ها برای پادهای nginx
+
+    spec:
+      containers:
+      - name: nginx
+        image: docker.arvancloud.ir/nginx:1.23.1  # تصویر Docker برای nginx
+        ports:
+        - containerPort: 80  # پورت nginx
+
+        # درخواست‌ها و محدودیت‌های منابع
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "250m"
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+
+        # بررسی زنده بودن کانتینر
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        # بررسی آمادگی کانتینر
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 15
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+        # تنظیمات امنیتی
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 3000
+          fsGroup: 2000
+          allowPrivilegeEscalation: false
+
+      # امنیت سطح پاد
+      securityContext:
+        fsGroup: 2000
+
+      # تعیین affinity و anti-affinity
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - your-node-name
+
+      antiAffinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app: nginx
+            topologyKey: "kubernetes.io/hostname"
