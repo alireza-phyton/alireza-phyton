@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: replica-nginx  # نام ReplicaSet
+  labels:
+    app: nginx         # برچسب‌ها برای شناسایی و گروه‌بندی
+    name: alireza
+    salam: aleik
+    chi: nokhodchee
+
+spec:
+  replicas: 5  # تعداد پادهای مورد نظر برای اجرای همزمان
+
+  selector:
+    matchLabels:
+      app: nginx        # مطابقت برچسب‌ها برای شناسایی پادهایی که این ReplicaSet باید مدیریت کند
+      class: monitoring
+
+  template:
+    metadata:
+      labels:
+        app: nginx      # برچسب‌ها برای پادها
+        class: monitoring
+
+    spec:
+      containers:
+      - name: replica-nginx
+        image: docker.arvancloud.ir/nginx:1.23.1  # تصویر Docker که پاد باید اجرا کند
+        ports:
+        - containerPort: 80  # پورت داخل کانتینر
+
+        # درخواست‌ها و محدودیت‌های منابع برای کانتینر
+        resources:
+          requests:
+            memory: "64Mi"  # میزان حافظه درخواست‌شده
+            cpu: "250m"      # میزان CPU درخواست‌شده
+          limits:
+            memory: "128Mi"  # حداکثر میزان حافظه مجاز
+            cpu: "500m"      # حداکثر میزان CPU مجاز
+
+        # بررسی زنده بودن کانتینر (اگر این بررسی ناموفق باشد، کانتینر مجدداً راه‌اندازی می‌شود)
+        livenessProbe:
+          httpGet:
+            path: /          # مسیر برای بررسی زنده بودن
+            port: 80         # پورت برای بررسی
+          initialDelaySeconds: 30  # تأخیر اولیه قبل از شروع بررسی‌ها
+          periodSeconds: 10        # دوره زمانی بین بررسی‌ها
+          timeoutSeconds: 5        # زمان‌سنج برای هر بررسی
+          failureThreshold: 3      # تعداد شکست‌های مجاز قبل از راه‌اندازی مجدد
+
+        # بررسی آمادگی کانتینر (اگر این بررسی ناموفق باشد، ترافیک به کانتینر ارسال نمی‌شود)
+        readinessProbe:
+          httpGet:
+            path: /          # مسیر برای بررسی آمادگی
+            port: 80         # پورت برای بررسی
+          initialDelaySeconds: 15  # تأخیر اولیه قبل از شروع بررسی‌ها
+          periodSeconds: 5         # دوره زمانی بین بررسی‌ها
+          timeoutSeconds: 3        # زمان‌سنج برای هر بررسی
+          failureThreshold: 3      # تعداد شکست‌های مجاز قبل از غیر فعال کردن ترافیک
+
+        # تنظیمات امنیتی برای اجرای کانتینر به عنوان کاربر غیر ریشه‌ای
+        securityContext:
+          runAsUser: 1000             # اجرای کانتینر با شناسه کاربر 1000
+          runAsGroup: 3000            # اجرای کانتینر با شناسه گروه 3000
+          fsGroup: 2000               # گروه فایل سیستم برای کانتینر
+          allowPrivilegeEscalation: false  # جلوگیری از ارتقاء امتیازات
+
+      # تنظیمات امنیتی برای سطح پاد
+      securityContext:
+        fsGroup: 2000  # گروه فایل سیستم برای پاد
+
+      # تعیین Affinity نودها برای کنترل زمانبندی پادها
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - your-node-name  # جایگزین با نام نود مورد نظر
+
+      # تعیین Anti-Affinity پاد برای پخش کردن Replica‌ها روی نودهای مختلف
+      antiAffinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app: nginx
+            topologyKey: "kubernetes.io/hostname"  # اطمینان از پخش شدن پادها بر اساس هاست‌نیم نودها
