@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-deployment  # نام Deployment
+  labels:
+    app: postgres
+
+spec:
+  replicas: 1  # تعداد پادهای PostgreSQL (معمولاً یک پاد کافی است)
+
+  selector:
+    matchLabels:
+      app: postgres  # برچسب‌هایی که پادها باید داشته باشند تا توسط این Deployment مدیریت شوند
+
+  template:
+    metadata:
+      labels:
+        app: postgres  # برچسب‌ها برای پادهای PostgreSQL
+
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:14.0  # تصویر Docker برای PostgreSQL
+        ports:
+        - containerPort: 5432  # پورت PostgreSQL
+
+        env:
+        - name: POSTGRES_PASSWORD  # تنظیم رمز عبور پیش‌فرض برای کاربر postgres
+          value: your-postgres-password
+
+        volumeMounts:
+        - name: postgres-storage  # نصب ولوم برای ذخیره‌سازی پایدار داده‌ها
+          mountPath: /var/lib/postgresql/data
+
+        # درخواست‌ها و محدودیت‌های منابع
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+
+        # بررسی زنده بودن کانتینر
+        livenessProbe:
+          tcpSocket:
+            port: 5432
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        # بررسی آمادگی کانتینر
+        readinessProbe:
+          tcpSocket:
+            port: 5432
+          initialDelaySeconds: 30
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+        # تنظیمات امنیتی
+        securityContext:
+          runAsUser: 1002
+          runAsGroup: 3002
+          fsGroup: 2002
+          allowPrivilegeEscalation: false
+
+      # امنیت سطح پاد
+      securityContext:
+        fsGroup: 2002
+
+      volumes:
+      - name: postgres-storage  # تعریف Persistent Volume برای ذخیره‌سازی پایدار
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+
+      # تعیین affinity و anti-affinity
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - your-node-name
